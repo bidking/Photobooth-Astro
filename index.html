@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astro Photobooth</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100% !important;
+                height: auto;
+                max-height: 40vh;
+            }
+            
+            .main-area {
+                height: 60vh !important;
+                overflow-y: auto;
+            }
+        }
+        
+        .sidebar {
+            width: 300px;
+            background-color: #1e1e1e;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        
+        .main-area {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            background-color: #262626;
+            height: 100vh;
+            position: relative;
+            overflow-y: auto; /* Enable vertical scrolling */
+        }
+        
+        .photo-strip {
+            background-color: #fff;
+            padding: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            width: 280px;
+            margin: 20px 0;
+            height: auto;
+            /* Removed max-height constraint */
+        }
+        
+        .photo-grid {
+            display: grid;
+            gap: 15px;
+            width: 100%;
+        }
+        
+        .grid-3x1 {
+            grid-template-rows: repeat(3, 1fr);
+            grid-template-columns: 1fr;
+            aspect-ratio: 1/3;
+        }
+        
+        .grid-2x2 {
+            grid-template-rows: repeat(2, 1fr);
+            grid-template-columns: repeat(2, 1fr);
+            aspect-ratio: 1/1;
+        }
+        
+        .grid-4x1 {
+            grid-template-rows: repeat(4, 1fr);
+            grid-template-columns: 1fr;
+            /* Allow this to have its natural height */
+            height: auto;
+            /* Maintain proper spacing between photos */
+            grid-auto-rows: minmax(200px, auto);
+        }
+        
+        .photo-slot {
+            background-color: #ddd;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            /* Set a fixed height for each photo slot to ensure visibility */
+            border: 2px solid #fff;
+        }
+        
+        .photo-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        h2 {
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 22px;
+            text-align: center;
+        }
+        
+        .btn {
+            background-color: #00e676;
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px 0;
+            transition: all 0.3s;
+            width: 100%;
+            font-size: 16px;
+        }
+        
+        .btn:hover {
+            background-color: #00c853;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background-color: #555;
+            color: #fff;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #777;
+        }
+        
+        .option-group {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+        }
+        
+        .option-label {
+            display: block;
+            margin-bottom: 10px;
+            color: #ddd;
+            font-weight: 500;
+        }
+        
+        .options {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .option {
+            background-color: #3a3a3a;
+            color: #fff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .option:hover {
+            background-color: #4a4a4a;
+        }
+        
+        .option.active {
+            background-color: #00e676;
+            color: #000;
+        }
+        
+        input[type="text"] {
+            background-color: #3a3a3a;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 10px;
+            width: 100%;
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .camera-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 120px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 30px; /* Add bottom margin to ensure controls are visible when scrolling */
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .filter-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .filter-option {
+            aspect-ratio: 1/1;
+            background-color: #333;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        
+        .filter-option:hover {
+            transform: scale(1.05);
+        }
+        
+        .filter-option.active {
+            border-color: #00e676;
+        }
+        
+        .filter-option div {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .filter-normal { filter: none; }
+        .filter-grayscale { filter: grayscale(100%); }
+        .filter-sepia { filter: sepia(100%); }
+        .filter-invert { filter: invert(80%); }
+        .filter-blur { filter: blur(2px); }
+        
+        #capturedPhotos {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+            cursor: pointer;
+        }
+        
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border: 2px solid #fff;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .camera-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #777;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .camera-placeholder svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+        
+        .preparing-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: #fff;
+            text-align: center;
+            background-color: rgba(0,0,0,0.7);
+            padding: 15px 30px;
+            border-radius: 50px;
+            z-index: 5;
+        }
+        .con {
+    display: flex;
+    gap: 20px;             /* Jarak antar elemen */
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 10px;         /* Memberikan sedikit ruang di sekitar container */
+}
+
+/* Template Cinema */
+.template-cinema {
+  background-color: #333;      /* Warna dasar */
+  position: relative;
+  border: 5px solid #000;      /* Bingkai hitam tebal */
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* Bagian atas */
+.template-cinema::before {
+  content: "";
+  position: absolute;
+  top: -20px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  /* Pola lubang dengan repeating-linear-gradient */
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 20px,  /* 20px pertama transparan */
+    #000 20px 40px        /* 20px berikutnya hitam */
+  );
+}
+
+/* Bagian bawah */
+.template-cinema::after {
+  content: "";
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 20px,
+    #000 20px 40px
+  );
+}
+/* Template Flower */
+.template-flower {
+  background-color: #ffe4e1; /* Warna pastel (MistyRose) */
+  position: relative;
+  border: 3px dashed #ff69b4; /* Garis putus-putus pink */
+}
+
+/* Ornamen bunga sederhana di pojok kiri atas */
+.template-flower::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle at 30px 30px, 
+                              #ff69b4 0%,
+                              transparent 50%);
+  /* 
+     Di sini #ff69b4 akan menjadi bulatan warna pink 
+     di tengah area 60x60, sisanya transparan. 
+     Anda bisa menggeser posisi, memperbesar area, 
+     atau menambahkan animasi dsb. 
+  */
+}
+
+/* Ornamen bunga sederhana di pojok kanan bawah */
+.template-flower::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle at 30px 30px, 
+                              #ff69b4 0%,
+                              transparent 50%);
+}
+video {
+  transform: scaleX(-1);
+}
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Astro Photobooth</h2>
+            
+            <button id="startBtn" class="btn">Take Photos</button>
+            
+            <div id="layoutOptions" class="option-group hidden">
+                <div class="option-label">Select layout style</div>
+                <div class="options">
+                    <button class="option" data-grid="grid-3x1">3 Photos</button>
+                    <button class="option" data-grid="grid-2x2">4 Photos (2×2)</button>
+                    <button class="option active" data-grid="grid-4x1">4 Photos (Strip)</button>
+                </div>
+            </div>
+            
+            <div id="filterOptions" class="option-group hidden">
+                <div class="option-label">Select background color</div>
+                <div class="options">
+                    <button class="option active" data-color="#ffffff">White</button>
+                    <button class="option" data-color="#000000">Black</button>
+                    <button class="option" data-color="#f5f5f5">Gray</button>
+                </div>
+                
+                <div class="option-label">Select filter</div>
+                <div class="filter-preview">
+                    <div class="filter-option active" data-filter="filter-normal">
+                        <div style="background:#777;"></div>
+                    </div>
+                    <div class="filter-option" data-filter="filter-grayscale">
+                        <div style="background:#777; filter:grayscale(100%);"></div>
+                    </div>
+                    <div class="filter-option" data-filter="filter-sepia">
+                        <div style="background:#777; filter:sepia(100%);"></div>
+                    </div>
+                    <div class="filter-option" data-filter="filter-invert">
+                        <div style="background:#777; filter:invert(80%);"></div>
+                    </div>
+                </div>
+                
+                <div class="option-label">Select template</div>
+                <div class="options template-options">
+                    <button class="option active" data-template="template-normal">Normal</button>
+                    <button class="option" data-template="template-cinema">Cinema</button>
+                    <button class="option" data-template="template-flower">Flower</button>
+                </div>
+
+                <div class="option-label">Enter text to display at bottom</div>
+                <input type="text" id="captionText" placeholder="Enter caption here">
+                
+                <button id="doneBtn" class="btn">Done</button>
+                <button id="retakeBtn" class="btn btn-secondary">Retake Photos</button>
+            </div>
+        </div>
+        
+        <div class="main-area">
+            <div class="con">
+                <div id="cameraView" class="camera-container">
+                    <div id="cameraPlaceholder" class="camera-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        <p>Click "Take Photos" to start the camera</p>
+                    </div>
+                    <video id="camera-feed"></video>
+                    <div class="countdown" id="countdown"></div>
+                    <div id="preparingText" class="preparing-text hidden">Preparing camera...</div>
+                    <div id="capturedPhotos"></div>
+                </div>
+                
+                
+                <div id="photoStripView" class="photo-strip hidden template-normal">
+                    <div id="photoGrid" class="photo-grid grid-4x1"></div>
+                </div>
+                
+            </div>
+            <div class="controls hidden" id="controls">
+                <button id="downloadBtn" class="btn">Download</button>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const startBtn = document.getElementById('startBtn');
+        const layoutOptions = document.getElementById('layoutOptions');
+        const filterOptions = document.getElementById('filterOptions');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const doneBtn = document.getElementById('doneBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const cameraView = document.getElementById('cameraView');
+        const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+        const preparingText = document.getElementById('preparingText');
+        const photoStripView = document.getElementById('photoStripView');
+        const photoGrid = document.getElementById('photoGrid');
+        const capturedPhotos = document.getElementById('capturedPhotos');
+        const cameraFeed = document.getElementById('camera-feed');
+        const countdown = document.getElementById('countdown');
+        const controls = document.getElementById('controls');
+    
+        // Variables
+        let stream = null;
+        let photosTaken = [];
+        let currentPhotoIndex = 0;
+        let maxPhotos = 4;
+        let selectedFilter = 'filter-normal';
+        let selectedGrid = 'grid-3x1';
+        let selectedColor = '#ffffff';
+    
+        // Event Listeners
+        startBtn.addEventListener('click', startCamera);
+        retakeBtn.addEventListener('click', resetPhotoBooth);
+        doneBtn.addEventListener('click', finishPhotos);
+    
+        // Template option buttons
+document.querySelectorAll('.option[data-template]').forEach(button => {
+    button.addEventListener('click', () => {
+        document.querySelectorAll('.option[data-template]').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        selectedTemplate = button.dataset.template;
+        
+        // Hapus semua kelas template yang mungkin sudah ada
+        photoStripView.classList.remove('template-normal', 'template-cinema', 'template-flower');
+        // Tambahkan kelas template baru
+        photoStripView.classList.add(selectedTemplate);
+    });
+});
+
+        // Grid option buttons
+        document.querySelectorAll('.option[data-grid]').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.option[data-grid]').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                selectedGrid = button.dataset.grid;
+    
+                // Set max photos based on grid
+                if (selectedGrid === 'grid-3x1') {
+                    maxPhotos = 3;
+                } else {
+                    maxPhotos = 4;
+                }
+    
+                updatePhotoStrip();
+            });
+        });
+    
+        // Color option buttons
+        document.querySelectorAll('.option[data-color]').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.option[data-color]').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                selectedColor = button.dataset.color;
+                photoStripView.style.backgroundColor = selectedColor;
+            });
+        });
+    
+        // Filter option buttons
+        document.querySelectorAll('.filter-option').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.filter-option').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                selectedFilter = button.dataset.filter;
+                updatePhotoFilters();
+            });
+        });
+    
+      downloadBtn.addEventListener('click', async () => {
+    try {
+        // Buat canvas baru untuk menggambar photo strip final
+        const finalCanvas = document.createElement('canvas');
+        const photoStripRect = photoStripView.getBoundingClientRect();
+        finalCanvas.width = photoStripRect.width;
+        finalCanvas.height = photoStripRect.height;
+        const ctx = finalCanvas.getContext('2d');
+
+        // Isi canvas dengan background color
+        ctx.fillStyle = selectedColor;
+        ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+        // Gambar dekorasi template di belakang foto (misalnya bar hitam untuk template-cinema atau ornamen untuk template-flower)
+        drawTemplateDecoration(ctx, finalCanvas.width, finalCanvas.height);
+
+        // Dapatkan semua foto dari photo grid dan gambar ke canvas final
+        const photoSlots = photoGrid.querySelectorAll('.photo-slot img');
+        for (let i = 0; i < photoSlots.length; i++) {
+            const img = photoSlots[i];
+            const rect = img.getBoundingClientRect();
+            // Terapkan filter pada gambar dan dapatkan canvas hasilnya
+            const filteredCanvas = applyFilterToCanvas(img, selectedFilter);
+            // Hitung posisi relatif terhadap photoStripView
+            const x = rect.left - photoStripRect.left;
+            const y = rect.top - photoStripRect.top;
+            ctx.drawImage(filteredCanvas, x, y, rect.width, rect.height);
+        }
+
+        // Gambar overlay template (misalnya border) di atas foto jika diperlukan
+        drawTemplateOverlay(ctx, finalCanvas.width, finalCanvas.height);
+
+        // Jika ada caption, tambahkan ke canvas
+        const caption = photoStripView.querySelector('.photo-caption');
+        if (caption) {
+            const captionRect = caption.getBoundingClientRect();
+            ctx.font = '14px Arial';
+            ctx.fillStyle = selectedColor === '#ffffff' ? '#000' : '#fff';
+            ctx.textAlign = 'center';
+            ctx.fillText(
+                caption.textContent,
+                finalCanvas.width / 2,
+                captionRect.top - photoStripRect.top + 20
+            );
+        }
+
+        // Konversi canvas final ke data URL dan buat link download
+        const dataUrl = finalCanvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = 'photo-strip.png';
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        console.error('Error downloading photo strip:', error);
+        alert('Failed to download photo strip. Please try again.');
+    }
+});
+// Fungsi menggambar dekorasi template (di belakang foto)
+function drawTemplateDecoration(ctx, width, height) {
+    if (selectedTemplate === 'template-cinema') {
+        // Contoh: gambar bar hitam di atas dan bawah dengan tinggi 20px
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, width, 20);             // Bar atas
+        ctx.fillRect(0, height - 20, width, 20);     // Bar bawah
+    } else if (selectedTemplate === 'template-flower') {
+        // Contoh: gambar dua ornamen sederhana berupa lingkaran di pojok atas kiri dan bawah kanan
+        ctx.fillStyle = '#ff69b4';
+        ctx.beginPath();
+        ctx.arc(30, 30, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(width - 30, height - 30, 15, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // Jika template-normal, tidak ada dekorasi tambahan
+}
+
+// Fungsi menggambar overlay template (misalnya border) di atas foto
+function drawTemplateOverlay(ctx, width, height) {
+    if (selectedTemplate === 'template-cinema') {
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(0, 0, width, height);
+    }
+    // Tambahkan overlay untuk template-flower jika diperlukan
+}
+    
+        // Functions
+        async function startCamera() {
+      // Sembunyikan placeholder kamera
+      cameraPlaceholder.classList.add('hidden');
+      // Tampilkan teks persiapan
+      preparingText.classList.remove('hidden');
+
+      try {
+          // Request akses kamera
+          stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { facingMode: 'user' },
+              audio: false 
+          });
+          // Tampilkan feed kamera
+          cameraFeed.srcObject = stream;
+          cameraFeed.style.display = 'block';
+          cameraFeed.play();
+
+          // Sembunyikan teks persiapan setelah kamera aktif
+          preparingText.classList.add('hidden');
+
+          // Jangan sembunyikan tombol, karena nanti tombol ini akan digunakan untuk ambil foto
+          // startBtn.classList.add('hidden');
+      } catch (err) {
+          console.error('Error accessing camera:', err);
+          alert('Could not access camera. Please make sure camera permissions are enabled.');
+          cameraPlaceholder.classList.remove('hidden');
+          preparingText.classList.add('hidden');
+      }
+  }
+
+
+
+        function handleThumbnailClick(e) {
+    if (e.target.classList.contains('thumbnail')) {
+        // Sembunyikan video feed
+        cameraFeed.style.display = 'none';
+        
+        // Buat atau dapatkan preview image
+        let previewImg = cameraView.querySelector('.preview-image');
+        if (!previewImg) {
+            previewImg = document.createElement('img');
+            previewImg.className = 'preview-image';
+            previewImg.style.cssText = `
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                position: absolute;
+                top: 0;
+                left: 0;
+            `;
+            cameraView.appendChild(previewImg);
+        }
+        
+        // Update source gambar preview
+        previewImg.src = e.target.src;
+        previewImg.style.display = 'block';
+    }
+}
+
+      
+// Modifikasi fungsi takePhoto()
+function takePhoto() {
+    startCountdown(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = cameraFeed.videoWidth;
+        canvas.height = cameraFeed.videoHeight;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(cameraFeed, 0, 0);
+
+        const photoDataUrl = canvas.toDataURL('image/jpeg');
+        photosTaken.push(photoDataUrl);
+
+        // Tambahkan thumbnail dengan event listener
+        const img = document.createElement('img');
+        img.src = photoDataUrl;
+        img.classList.add('thumbnail');
+        img.addEventListener('click', handleThumbnailClick);
+        capturedPhotos.appendChild(img);
+        capturedPhotos.style.display = 'flex';
+
+        currentPhotoIndex++;
+
+        if (currentPhotoIndex < maxPhotos) {
+            setTimeout(() => takePhoto(), 1000);
+        } else {
+            stopCamera();
+            showOptions();
+        }
+    });
+}
+
+// Tambahkan CSS untuk preview image
+const style = document.createElement('style');
+style.textContent = `
+    .camera-container {
+        position: relative;
+    }
+    .preview-image {
+        display: none;
+    }
+    #capturedPhotos {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 10;
+    }
+    .thumbnail {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border: 2px solid #fff;
+        border-radius: 4px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .thumbnail:hover {
+        transform: scale(1.1);
+    }
+`;
+document.head.appendChild(style);
+    
+        function startCountdown(callback) {
+            countdown.style.display = 'block';
+            let count = 1;
+    
+            countdown.textContent = count;
+    
+            const countdownInterval = setInterval(() => {
+                count--;
+                countdown.textContent = count;
+    
+                if (count === 0) {
+                    clearInterval(countdownInterval);
+                    countdown.style.display = 'none';
+                    callback();
+                }
+            }, 1000);
+        }
+    
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+    
+        function showOptions() {
+            layoutOptions.classList.remove('hidden');
+            filterOptions.classList.remove('hidden');
+            updatePhotoStrip();
+            photoStripView.classList.remove('hidden');
+            controls.classList.remove('hidden');
+        }
+    
+        function updatePhotoStrip() {
+            // Bersihkan grid
+            photoGrid.innerHTML = '';
+    
+            // Update style grid
+            photoGrid.className = `photo-grid ${selectedGrid}`;
+    
+            // Tambahkan foto ke grid (dibatasi maxPhotos)
+            const photosToShow = photosTaken.slice(0, maxPhotos);
+    
+            photosToShow.forEach((photo) => {
+                const photoSlot = document.createElement('div');
+                photoSlot.classList.add('photo-slot');
+    
+                const img = document.createElement('img');
+                img.src = photo;
+                img.classList.add(selectedFilter);
+    
+                photoSlot.appendChild(img);
+                photoGrid.appendChild(photoSlot);
+            });
+        }
+    
+        function updatePhotoFilters() {
+            const photos = photoGrid.querySelectorAll('img');
+            photos.forEach(img => {
+                // Update class filter
+                img.className = selectedFilter;
+            });
+        }
+    
+        function resetPhotoBooth() {
+    window.location.reload();
+}
+
+    
+        function finishPhotos() {
+            // Terapkan caption jika ada
+            const captionText = document.getElementById('captionText').value;
+            if (captionText) {
+                // Hapus caption yang sudah ada (jika ada)
+                const existingCaption = photoStripView.querySelector('.photo-caption');
+                if (existingCaption) {
+                    photoStripView.removeChild(existingCaption);
+                }
+    
+                const caption = document.createElement('div');
+                caption.className = 'photo-caption';
+                caption.style.textAlign = 'center';
+                caption.style.padding = '10px';
+                caption.style.marginTop = '15px';
+                caption.style.color = selectedColor === '#ffffff' ? '#000' : '#fff';
+                caption.style.fontSize = '14px';
+                caption.style.borderRadius = '4px';
+                caption.textContent = captionText;
+    
+                photoStripView.appendChild(caption);
+            }
+    
+            // Sembunyikan tampilan kamera namun biarkan sidebar tetap terlihat
+            cameraView.classList.add('hidden');
+    
+            // Tampilkan kembali opsi layout dan filter
+            layoutOptions.classList.remove('hidden');
+            filterOptions.classList.remove('hidden');
+    
+            // Tampilkan photo strip dan kontrol
+            photoStripView.style.display = 'block';
+            controls.classList.remove('hidden');
+    
+            // Ubah teks tombol Done untuk menunjukkan bahwa desain masih bisa diperbarui
+            doneBtn.textContent = 'Update Design';
+    
+            // Ubah perilaku tombol Done
+            doneBtn.removeEventListener('click', finishPhotos);
+            doneBtn.addEventListener('click', updateDesign);
+        }
+    
+        // Fungsi untuk memperbarui desain (update foto, filter, caption, dll.)
+        function updateDesign() {
+            updatePhotoStrip();
+            updatePhotoFilters();
+    
+            const captionText = document.getElementById('captionText').value;
+            const existingCaption = photoStripView.querySelector('.photo-caption');
+    
+            if (captionText && !existingCaption) {
+                const caption = document.createElement('div');
+                caption.className = 'photo-caption';
+                caption.style.textAlign = 'center';
+                caption.style.padding = '10px';
+                caption.style.marginTop = '15px';
+                caption.style.color = selectedColor === '#ffffff' ? '#000' : '#fff';
+                caption.style.fontSize = '14px';
+                caption.style.borderRadius = '4px';
+                caption.textContent = captionText;
+    
+                photoStripView.appendChild(caption);
+            } else if (captionText && existingCaption) {
+                existingCaption.textContent = captionText;
+                existingCaption.style.color = selectedColor === '#ffffff' ? '#000' : '#fff';
+            } else if (!captionText && existingCaption) {
+                photoStripView.removeChild(existingCaption);
+            }
+    
+            // Pastikan background photo strip juga terupdate
+            photoStripView.style.backgroundColor = selectedColor;
+        }
+    
+        // ------------------ Fungsi Filter ------------------
+        // Fungsi untuk menerapkan filter langsung ke data gambar
+        function applyFilterToCanvas(sourceImage, filter) {
+            const canvas = document.createElement('canvas');
+            canvas.width = sourceImage.naturalWidth || sourceImage.width;
+            canvas.height = sourceImage.naturalHeight || sourceImage.height;
+            const ctx = canvas.getContext('2d');
+    
+            // Gambar gambar asli ke canvas
+            ctx.drawImage(sourceImage, 0, 0);
+    
+            // Terapkan efek filter berdasarkan pilihan
+            switch(filter) {
+                case 'filter-grayscale':
+                    applyGrayscaleFilter(ctx, canvas.width, canvas.height);
+                    break;
+                case 'filter-sepia':
+                    applySepiaFilter(ctx, canvas.width, canvas.height);
+                    break;
+                case 'filter-invert':
+                applyInvertFilter(ctx, canvas.width, canvas.height);
+                    break;
+                // Tambahkan filter lainnya jika diperlukan
+                case 'filter-normal':
+                default:
+                    // Tidak ada filter yang diterapkan
+                    break;
+            }
+    
+            return canvas;
+        }
+    
+        // Implementasi filter Grayscale
+        function applyGrayscaleFilter(ctx, width, height) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+    
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                data[i] = avg;     
+                data[i + 1] = avg; 
+                data[i + 2] = avg; 
+            }
+    
+            ctx.putImageData(imageData, 0, 0);
+        }
+    
+        // Implementasi filter Sepia
+        function applySepiaFilter(ctx, width, height) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+    
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+    
+                data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+                data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+                data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+            }
+    
+            ctx.putImageData(imageData, 0, 0);
+        }
+    
+        // Implementasi filter Vintage (gabungan sepia dan vignette)
+        function applyInvertFilter(ctx, width, height) {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+        data[i] = 255 - data[i];       // Red
+        data[i + 1] = 255 - data[i + 1]; // Green
+        data[i + 2] = 255 - data[i + 2]; // Blue
+        // data[i + 3] tetap (alpha)
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+}
+        // ----------------------------------------------------
+     
+
+        // Inisialisasi preview kamera saat halaman dimuat
+        function initializeCameraPreview() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('Your browser does not support camera access. Please use a modern browser like Chrome, Firefox, or Edge.');
+                startBtn.disabled = true;
+                return;
+            }
+            cameraPlaceholder.classList.remove('hidden');
+        }
+    
+      window.addEventListener('load', startCamera);
+
+  // Ubah event listener tombol "Take Photos" untuk memicu pengambilan foto
+  startBtn.removeEventListener('click', startCamera); // Hapus listener jika sudah ada
+  startBtn.addEventListener('click', takePhoto);
+
+    </script>
+    
+</body>
+</html>
